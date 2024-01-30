@@ -2,12 +2,12 @@ import numpy as np
 import torch
 from torch_geometric.data import InMemoryDataset, Data, download_url
 
-class BenzeneDataset(InMemoryDataset):
-    url = 'https://github.com/mims-harvard/GraphXAI/raw/main/graphxai/datasets/real_world/benzene'
-    filename = 'benzene.npz'
+class FluorideCarbonylDataset(InMemoryDataset):
+    url = 'https://github.com/mims-harvard/GraphXAI/raw/main/graphxai/datasets/real_world/fluoride_carbonyl'
+    filename = 'fluoride_carbonyl.npz'
 
     def __init__(self, root, transform=None, pre_transform=None):
-        super(BenzeneDataset, self).__init__(root, transform, pre_transform)
+        super(FluorideCarbonylDataset, self).__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
     @property
@@ -16,7 +16,7 @@ class BenzeneDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['benzene.pt']
+        return ['fluoride_carbonyl.pt']
 
     def download(self):
         download_url(f'{self.url}/{self.filename}', self.raw_dir)

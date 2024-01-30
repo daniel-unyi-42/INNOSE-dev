@@ -6,16 +6,22 @@ from GNLayer import GNLayer
 
 
 class GNBlock(nn.Module):
-    def __init__(self, indim, outdim, edgedim=0):
+    def __init__(self, indim, outdim, edgedim=0, act=None, norm=None):
         super().__init__()
         self.conv = GNLayer(indim, outdim, outdim, edgedim)
-        self.act = nn.PReLU()
-        self.norm = nn.BatchNorm1d(outdim, track_running_stats=False)
+        # if edgedim == 0:
+        #   self.conv = gnn.GINConv(gnn.MLP([indim, outdim], norm=None))
+        # else:
+        #   self.conv = gnn.GINEConv(gnn.MLP([indim, outdim], norm=None), edge_dim=edgedim)
+        self.act = act
+        self.norm = norm
 
     def forward(self, x, edge_index, edge_attr=None):
         x = self.conv(x, edge_index, edge_attr)
-        x = self.act(x)
-        x = self.norm(x)
+        if self.act:
+          x = self.act(x)
+        if self.norm:
+          x = self.norm(x)
         return x
 
 
@@ -26,12 +32,11 @@ class GNN(nn.Module):
       self.hiddendim = hiddendim
       self.outdim = outdim
       self.edgedim = edgedim
-      self.conv1 = GNBlock(indim, hiddendim, edgedim)
-      self.conv2 = GNBlock(hiddendim, hiddendim, edgedim)
-      self.conv3 = GNBlock(hiddendim, hiddendim, edgedim)
-      self.conv4 = GNBlock(hiddendim, hiddendim, edgedim)
-      self.pool = gnn.global_mean_pool
-      self.head = gnn.MLP([hiddendim, hiddendim, outdim], norm=None)
+      self.conv1 = GNBlock(indim, hiddendim, edgedim, act=nn.PReLU(), norm=gnn.InstanceNorm(self.hiddendim))
+      self.conv2 = GNBlock(hiddendim, hiddendim, edgedim, act=nn.PReLU(), norm=gnn.InstanceNorm(self.hiddendim))
+      self.conv3 = GNBlock(hiddendim, hiddendim, edgedim, act=nn.PReLU(), norm=gnn.InstanceNorm(self.hiddendim))
+      self.conv4 = GNBlock(hiddendim, hiddendim, edgedim, act=nn.PReLU(), norm=gnn.InstanceNorm(self.hiddendim))
+      self.head = gnn.MLP([2*hiddendim, hiddendim, outdim], norm=None)
       self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       if self.device != torch.device('cuda'):
         print('WARNING: GPU not available. Using CPU instead.')
@@ -45,7 +50,7 @@ class GNN(nn.Module):
       x = self.conv2(x, data.edge_index, data.edge_attr)
       x = self.conv3(x, data.edge_index, data.edge_attr)
       x = self.conv4(x, data.edge_index, data.edge_attr)
-      x = self.pool(x, data.batch)
+      x = torch.cat([gnn.global_mean_pool(x, data.batch), gnn.global_max_pool(x, data.batch)], dim=1)
       x = self.head(x)
       return x
 
@@ -86,7 +91,7 @@ class GNN(nn.Module):
       y_trues = []
       for data in loader:
         data = data.to(self.device)
-        out = self(data)
+        out = F.softmax(self(data))
         y_preds.append(out.argmax(dim=1))
         y_trues.append(data.y)
       y_preds = torch.cat(y_preds).detach().cpu().numpy()
